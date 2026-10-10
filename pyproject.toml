@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "termix-platform-sdk"
+version = "0.0.0"
+description = "Python SDK for the TermiX (AACP) marketplace platform API — a business-flow wrapper, not a thin HTTP client."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+  "httpx>=0.27",
+  "pydantic>=2.6",
+]
+
+[project.optional-dependencies]
+# On-chain signing (mode B) is optional — the read/REST path needs none.
+signer = ["web3>=6.15"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "mypy>=1.9", "ruff>=0.4"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/termix_platform_sdk"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
