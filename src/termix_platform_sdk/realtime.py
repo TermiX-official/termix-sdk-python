@@ -40,22 +40,29 @@ class RealtimeResource:
         token = self._tp()
         if not token:
             raise RuntimeError("realtime.subscribe requires an authenticated session (no token)")
-        url = f"{self._base}/realtime/sse?token={token}"
+        url = f"{self._base}/realtime/sse"
 
         async def run() -> None:
             client = self._client or httpx.AsyncClient(timeout=None)
             try:
-                async with client.stream("GET", url, headers={"accept": "text/event-stream"}) as resp:
+                async with client.stream(
+                    "GET",
+                    url,
+                    params={"token": token},
+                    headers={"accept": "text/event-stream"},
+                    timeout=None,
+                ) as resp:
                     if resp.status_code >= 400:
                         raise RuntimeError(f"realtime SSE failed: HTTP {resp.status_code}")
-                    buf = ""
-                    async for chunk in resp.aiter_text():
-                        buf += chunk
-                        while "\n\n" in buf:
-                            raw, buf = buf.split("\n\n", 1)
-                            ev = _parse_event(raw)
-                            if ev:
-                                on_event(ev)
+                    event_lines: list[str] = []
+                    async for line in resp.aiter_lines():
+                        if line != "":
+                            event_lines.append(line)
+                            continue
+                        ev = _parse_event("\n".join(event_lines))
+                        event_lines = []
+                        if ev:
+                            on_event(ev)
             except asyncio.CancelledError:
                 raise
             except Exception as e:  # noqa: BLE001
