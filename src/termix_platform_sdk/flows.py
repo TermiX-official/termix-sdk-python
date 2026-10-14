@@ -176,10 +176,15 @@ class Flows:
         intents = _extract_intents(prep)
         tx_hashes: List[str] = []
         if auto_sign:
-            for intent in intents:
+            signer = self._c.signer
+            for i, intent in enumerate(intents):
                 h = await self._broadcast(intent, True)
                 if h:
                     tx_hashes.append(h)
+                    # When multiple sequential intents exist (e.g. bond approval before contract call),
+                    # the prior transaction must be mined before the next transaction can succeed.
+                    if i < len(intents) - 1 and signer is not None and hasattr(signer, "wait_for_receipt"):
+                        await signer.wait_for_receipt(h, intent.get("chainId"))
         if not auto_sign or not tx_hashes:
             return {"intents": intents, "tx_hashes": tx_hashes, "result": None}
         order = await wait_for(lambda: self._c.orders.get(order_id), lambda o: o.get("status") == "IN_DISPUTE", **(wait or {}))
