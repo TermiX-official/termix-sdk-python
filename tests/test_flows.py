@@ -112,3 +112,36 @@ async def test_register_agent_rejects_taken_handle():
 
     with pytest.raises(ValueError, match="not available"):
         await Flows(C()).register_agent("taken", auto_sign=True)
+
+
+@pytest.mark.asyncio
+async def test_open_dispute_waits_for_prior_intent_receipt():
+    class DisputeOrders:
+        def __init__(self):
+            self.dispute_payload = None
+
+        async def open_dispute(self, order_id, body):
+            self.dispute_payload = body
+            return {
+                "bondApprovalTxIntent": intent("bondApprovalTxIntent"),
+                "openChallenge": intent("openChallenge"),
+            }
+
+        async def get(self, order_id):
+            return {"id": order_id, "status": "IN_DISPUTE"}
+
+    class DisputeClient:
+        def __init__(self, signer):
+            self.signer = signer
+            self.orders = DisputeOrders()
+
+    signer = MockSigner(with_receipt=True)
+    client = DisputeClient(signer)
+    flows = Flows(client)
+    res = await flows.open_dispute("o1", auto_sign=True, wait=FAST)
+    assert len(res["tx_hashes"]) == 2
+    assert res["result"]["status"] == "IN_DISPUTE"
+    send_idxs = [i for i, e in enumerate(signer.events) if e.startswith("send:")]
+    receipt_idx = next(i for i, e in enumerate(signer.events) if e.startswith("receipt:"))
+    assert send_idxs[0] < receipt_idx < send_idxs[1]
+

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from typing import Any, Callable, Optional
 
 import httpx
@@ -55,12 +56,16 @@ class RealtimeResource:
                             raw, buf = buf.split("\n\n", 1)
                             ev = _parse_event(raw)
                             if ev:
-                                on_event(ev)
+                                res = on_event(ev)
+                                if inspect.isawaitable(res):
+                                    await res
             except asyncio.CancelledError:
                 raise
             except Exception as e:  # noqa: BLE001
                 if on_error:
-                    on_error(e)
+                    res = on_error(e)
+                    if inspect.isawaitable(res):
+                        await res
             finally:
                 if self._client is None:
                     await client.aclose()
